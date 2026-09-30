@@ -7,7 +7,10 @@ there is no scoring, no match timer, and the reset that happens after
 a goal is incomplete. That's what Tasks 2-4 fix/add.
 """
 
+import math
 import random
+
+import pygame
 
 from game.puck import Puck
 from game.paddle import Paddle
@@ -19,6 +22,7 @@ PLAYER_SPEED = 6
 PUCK_RADIUS = 12
 PADDLE_RADIUS = 28
 INITIAL_PUCK_SPEED = 4.5
+MATCH_DURATION = 30  # seconds
 
 
 class GameEngine:
@@ -42,6 +46,20 @@ class GameEngine:
         self.player_score = 0
         self.computer_score = 0
 
+        # 30-second match timer.
+        self.game_over = False
+        self.winner = None
+        self.match_start_ms = pygame.time.get_ticks()
+
+    def reset(self):
+        """Restart the whole match: scores, puck, paddles and timer."""
+        self.__init__()
+
+    def time_left(self):
+        """Seconds remaining in the match (never below 0)."""
+        elapsed = (pygame.time.get_ticks() - self.match_start_ms) / 1000.0
+        return max(0.0, MATCH_DURATION - elapsed)
+
     def _launch_puck(self):
         angle_choices = [0.3, 0.6, -0.3, -0.6]
         direction = random.choice([-1, 1])
@@ -50,7 +68,11 @@ class GameEngine:
         self.puck.vy = INITIAL_PUCK_SPEED * vy_factor
 
     def handle_input(self, keys_pressed):
-        import pygame
+        # R restarts the whole match at any time.
+        if keys_pressed[pygame.K_r]:
+            self.reset()
+            return
+
         dx = dy = 0
         if keys_pressed[pygame.K_UP]:
             dy -= PLAYER_SPEED
@@ -63,6 +85,17 @@ class GameEngine:
         self.player.move_by(dx, dy)
 
     def update(self):
+        if self.game_over:
+            return
+
+        # When time runs out, freeze the puck and lock in the result.
+        if self.time_left() <= 0:
+            self.game_over = True
+            self.winner = self.get_winner()
+            self.puck.vx = 0
+            self.puck.vy = 0
+            return
+
         self.ai.update(self.computer, self.puck)
 
         self.puck.move()
@@ -118,3 +151,17 @@ class GameEngine:
         comp_w = font.size(comp_text)[0]
         renderer.draw_text(surface, font, comp_text,
                            (WIDTH - MARGIN - 10 - comp_w, MARGIN + 8), renderer.COLOR_COMPUTER)
+
+        # Countdown timer, centred at the top.
+        timer_text = f"Time: {math.ceil(self.time_left())}"
+        timer_w = font.size(timer_text)[0]
+        renderer.draw_text(surface, font, timer_text, (WIDTH / 2 - timer_w / 2, MARGIN + 8))
+
+        # When the match is over, show the result and how to restart.
+        if self.game_over:
+            result = "Draw" if self.winner == "Draw" else f"{self.winner} Wins!"
+            renderer.draw_banner(surface, font, result)
+            hint = "Press R to restart"
+            hint_w = font.size(hint)[0]
+            renderer.draw_text(surface, font, hint,
+                               (WIDTH / 2 - hint_w / 2, HEIGHT / 2 + 30))
