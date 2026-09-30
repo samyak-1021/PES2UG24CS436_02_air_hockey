@@ -133,9 +133,10 @@ class GameEngine:
         return "Draw"
 
     def _reset_puck(self):
+        # Send the puck back to the centre and immediately re-launch it with a
+        # fresh random direction at the normal speed, so it never sits still.
         self.puck.x, self.puck.y = WIDTH / 2, HEIGHT / 2
-        self.puck.vx = 0
-        self.puck.vy = 0
+        self._launch_puck()
 
     def draw(self, surface, font):
         from game import renderer
